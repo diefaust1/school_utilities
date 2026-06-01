@@ -1,0 +1,32 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Grader | Login</title>
+    <link rel="stylesheet" href="{% static 'core/login.css' %}">
+  </head>
+  <body>
+    <main class="page-shell">
+      <section class="login-card" aria-labelledby="login-title">
+        <p class="eyebrow">School Utilities</p>
+        <h1 id="login-title">Auto Grader</h1>
+        <p class="intro">Sign in to access your exams and grading workspace.</p>
+
+        <form class="login-form">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username" required>
+
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required>
+
+          <button type="button">Sign in</button>
+        </form>
+
+        <p class="notice">Login functionality will be added in the next step.</p>
+      </section>
+    </main>
+  </body>
+</html>
+
