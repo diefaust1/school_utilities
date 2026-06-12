@@ -59,6 +59,8 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = []
+AUTH_USER_MODEL = "core.User"
+LOGIN_URL = "login"
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Europe/Berlin"

@@ -1,0 +1,51 @@
+{% extends "core/base.html" %}
+
+{% block title %}Test Creation{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Teacher workspace</p>
+      <h1>Test Creation</h1>
+      <p class="page-intro">Draft the basic information for a new test.</p>
+    </div>
+  </header>
+
+  <form class="panel form-stack narrow-panel">
+    <div class="field-row">
+      <div>
+        <label for="test-title">Test title</label>
+        <input id="test-title" type="text" placeholder="e.g. Mathematics - Algebra">
+      </div>
+      <div>
+        <label for="test-date">Date</label>
+        <input id="test-date" type="date">
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div>
+        <label for="test-length">Time limit in minutes</label>
+        <input id="test-length" type="number" min="1" placeholder="45">
+      </div>
+      <div>
+        <label for="test-status">Status</label>
+        <select id="test-status">
+          <option>Not active</option>
+          <option>Active</option>
+        </select>
+      </div>
+    </div>
+
+    <label for="instructions">Instructions</label>
+    <textarea id="instructions" rows="5" placeholder="Instructions shown to students before the test..."></textarea>
+
+    <div class="question-placeholder">
+      <strong>Questions</strong>
+      <p>Question creation will be implemented in a later phase.</p>
+    </div>
+
+    <button class="primary-button align-start" type="button">Save draft</button>
+    <p class="form-note">Test creation is a frontend preview and does not save data yet.</p>
+  </form>
+{% endblock %}

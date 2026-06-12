@@ -1,0 +1,59 @@
+{% extends "core/base.html" %}
+
+{% block title %}{{ test.title }}{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <a class="back-link" href="{% url 'test-overview' %}">&larr; Back to overview</a>
+      <p class="eyebrow">Active test</p>
+      <h1>{{ test.title }}</h1>
+      <p class="page-intro">{{ test.date }} · {{ test.length }}</p>
+    </div>
+    <div class="timer-card">
+      <span>Time remaining</span>
+      <strong>44:32</strong>
+    </div>
+  </header>
+
+  <div class="content-grid">
+    <form class="panel form-stack">
+      <div class="question-block">
+        <div class="question-heading">
+          <h2>Question 1</h2>
+          <span>4 points</span>
+        </div>
+        <p>Solve the equation: <strong>3x + 7 = 22</strong>. Show your calculation.</p>
+        <label for="answer-one">Your answer</label>
+        <textarea id="answer-one" rows="6" placeholder="Write your answer here..."></textarea>
+      </div>
+
+      <div class="question-block">
+        <div class="question-heading">
+          <h2>Question 2</h2>
+          <span>6 points</span>
+        </div>
+        <p>Explain how you can check whether your answer to an equation is correct.</p>
+        <label for="answer-two">Your answer</label>
+        <textarea id="answer-two" rows="7" placeholder="Write your answer here..."></textarea>
+      </div>
+
+      <button class="primary-button align-start" type="button">Submit test</button>
+      <p class="form-note">Answers are not saved during the frontend-only phase.</p>
+    </form>
+
+    <aside class="panel detail-panel">
+      <h2>Student details</h2>
+      <dl>
+        <dt>Name</dt>
+        <dd>{{ request.user.get_full_name|default:request.user.email }}</dd>
+        <dt>E-mail</dt>
+        <dd>{{ request.user.email }}</dd>
+        <dt>Questions</dt>
+        <dd>2</dd>
+        <dt>Total points</dt>
+        <dd>10</dd>
+      </dl>
+    </aside>
+  </div>
+{% endblock %}

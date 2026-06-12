@@ -1,0 +1,43 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Grader | {% block title %}{% endblock %}</title>
+    <link rel="stylesheet" href="{% static 'core/app.css' %}">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div>
+          <p class="eyebrow sidebar-eyebrow">School Utilities</p>
+          <a class="brand" href="{% url 'test-overview' %}">Auto Grader</a>
+        </div>
+
+        <nav class="main-nav" aria-label="Main navigation">
+          <a class="{% if active_page == 'overview' %}active{% endif %}" href="{% url 'test-overview' %}">
+            Test Overview
+          </a>
+          {% if request.user.role == "teacher" %}
+            <a class="{% if active_page == 'creation' %}active{% endif %}" href="{% url 'test-creation' %}">
+              Test Creation
+            </a>
+          {% endif %}
+          <a class="{% if active_page == 'account' %}active{% endif %}" href="{% url 'account-info' %}">
+            Account Info
+          </a>
+        </nav>
+
+        <form class="sign-out-form" action="{% url 'logout' %}" method="post">
+          {% csrf_token %}
+          <button class="sign-out-link" type="submit">Sign out</button>
+        </form>
+      </aside>
+
+      <main class="page-content">
+        {% block content %}{% endblock %}
+      </main>
+    </div>
+  </body>
+</html>

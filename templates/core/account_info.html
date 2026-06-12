@@ -1,0 +1,73 @@
+{% extends "core/base.html" %}
+
+{% block title %}Account Info{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Profile</p>
+      <h1>Account Info</h1>
+      <p class="page-intro">Review your account details and update your name.</p>
+    </div>
+  </header>
+
+  <section class="panel narrow-panel">
+    <div class="profile-heading">
+      <span class="avatar large-avatar" aria-hidden="true">ES</span>
+      <div>
+        <h2>{{ request.user.get_full_name|default:request.user.email }}</h2>
+        <p>{{ request.user.get_role_display }} account</p>
+      </div>
+    </div>
+
+    {% if saved %}
+      <p class="form-success" role="status">Your name was saved.</p>
+    {% endif %}
+
+    <form class="form-stack account-form" method="post">
+      {% csrf_token %}
+
+      <div class="field-row">
+        <div>
+          <label for="{{ form.first_name.id_for_label }}">First name</label>
+          <input
+            id="{{ form.first_name.id_for_label }}"
+            name="{{ form.first_name.html_name }}"
+            type="text"
+            value="{{ form.first_name.value|default:'' }}"
+            maxlength="150"
+            autocomplete="given-name"
+          >
+          {% for error in form.first_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+
+        <div>
+          <label for="{{ form.last_name.id_for_label }}">Last name</label>
+          <input
+            id="{{ form.last_name.id_for_label }}"
+            name="{{ form.last_name.html_name }}"
+            type="text"
+            value="{{ form.last_name.value|default:'' }}"
+            maxlength="150"
+            autocomplete="family-name"
+          >
+          {% for error in form.last_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </div>
+      </div>
+
+      <dl class="account-details read-only-details">
+        <div>
+          <dt>E-mail</dt>
+          <dd>{{ request.user.email }}</dd>
+        </div>
+        <div>
+          <dt>Date of creation</dt>
+          <dd>{{ request.user.date_joined|date:"j F Y" }}</dd>
+        </div>
+      </dl>
+
+      <button class="primary-button align-start" type="submit">Save changes</button>
+      <p class="form-note">E-mail address and account type cannot currently be changed.</p>
+    </form>
+  </section>
+{% endblock %}

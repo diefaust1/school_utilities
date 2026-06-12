@@ -1,0 +1,41 @@
+{% extends "core/base.html" %}
+
+{% block title %}Test Overview{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Student workspace</p>
+      <h1>Test Overview</h1>
+      <p class="page-intro">Open an active test or review the status of your recent tests.</p>
+    </div>
+    <div class="user-summary">
+      <span class="avatar" aria-hidden="true">ES</span>
+      <div>
+        <strong>{{ request.user.get_full_name|default:request.user.email }}</strong>
+        <span>{{ request.user.get_role_display }}</span>
+      </div>
+    </div>
+  </header>
+
+  <section aria-labelledby="available-tests">
+    <div class="section-heading">
+      <h2 id="available-tests">Available tests</h2>
+      <span>{{ tests|length }} tests</span>
+    </div>
+
+    <div class="card-grid">
+      {% for test in tests %}
+        <a class="test-card" href="{% url 'test-detail' test.id %}">
+          <div class="card-topline">
+            <span class="status status-{{ test.status|lower }}">{{ test.status }}</span>
+            <span>{{ test.length }}</span>
+          </div>
+          <h3>{{ test.title }}</h3>
+          <p>{{ test.date }}</p>
+          <span class="card-action">Open test <span aria-hidden="true">&rarr;</span></span>
+        </a>
+      {% endfor %}
+    </div>
+  </section>
+{% endblock %}

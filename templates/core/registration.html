@@ -1,0 +1,74 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Auto Grader | Create Account</title>
+    <link rel="stylesheet" href="{% static 'core/app.css' %}">
+    <script src="{% static 'core/auth.js' %}" defer></script>
+  </head>
+  <body class="login-body">
+    <main class="login-shell">
+      <section class="login-card" aria-labelledby="registration-title">
+        <p class="eyebrow">Account registration</p>
+        <h1 id="registration-title">Create account</h1>
+        <p class="intro">Create a student or teacher account to access your workspace.</p>
+
+        {% if form.non_field_errors %}
+          <div class="form-error" role="alert">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <form class="form-stack auth-form" method="post" data-password-check>
+          {% csrf_token %}
+
+          <label for="{{ form.email.id_for_label }}">E-mail address</label>
+          <input
+            id="{{ form.email.id_for_label }}"
+            name="{{ form.email.html_name }}"
+            type="email"
+            value="{{ form.email.value|default:'' }}"
+            autocomplete="email"
+            required
+          >
+          {% for error in form.email.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+
+          <label for="{{ form.role.id_for_label }}">Account type</label>
+          <select id="{{ form.role.id_for_label }}" name="{{ form.role.html_name }}" required>
+            {% for value, label in form.role.field.choices %}
+              <option value="{{ value }}" {% if form.role.value == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+          {% for error in form.role.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+
+          <label for="{{ form.password.id_for_label }}">Password</label>
+          <input
+            id="{{ form.password.id_for_label }}"
+            name="{{ form.password.html_name }}"
+            type="password"
+            minlength="4"
+            autocomplete="new-password"
+            required
+          >
+          {% for error in form.password.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+
+          <label for="{{ form.password_confirm.id_for_label }}">Confirm password</label>
+          <input
+            id="{{ form.password_confirm.id_for_label }}"
+            name="{{ form.password_confirm.html_name }}"
+            type="password"
+            minlength="4"
+            autocomplete="new-password"
+            required
+          >
+          {% for error in form.password_confirm.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+
+          <p class="field-error" data-password-error hidden>The passwords do not match.</p>
+          <button class="primary-button" type="submit">Create account</button>
+        </form>
+
+        <p class="notice">Already have an account? <a href="{% url 'login' %}">Sign in</a></p>
+      </section>
+    </main>
+  </body>
+</html>
