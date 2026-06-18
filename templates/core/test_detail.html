@@ -8,51 +8,122 @@
       <a class="back-link" href="{% url 'test-overview' %}">&larr; Back to overview</a>
       <p class="eyebrow">Active test</p>
       <h1>{{ test.title }}</h1>
-      <p class="page-intro">{{ test.date }} · {{ test.length }}</p>
+      <p class="page-intro">{{ test.date|date:"j F Y" }} · {{ test.length_minutes }} minutes</p>
     </div>
-    <div class="timer-card">
-      <span>Time remaining</span>
-      <strong>44:32</strong>
+    <div class="test-header-actions">
+      <div class="timer-card">
+        <span>Time limit</span>
+        <strong>{{ test.length_minutes }} min</strong>
+      </div>
+      <button class="secondary-button print-action" type="button" data-print-test>Save as PDF</button>
     </div>
   </header>
 
+  {% if submitted %}
+    <p class="form-success test-status-message" role="status">Your test submission was saved.</p>
+  {% endif %}
+
+  {% if not test.is_active %}
+    <p class="form-error test-status-message" role="status">This test is currently inactive and cannot be submitted.</p>
+  {% elif existing_submission %}
+    <p class="form-success test-status-message" role="status">You have already submitted this test. A teacher can reopen it if you need another attempt.</p>
+  {% endif %}
+
   <div class="content-grid">
-    <form class="panel form-stack">
-      <div class="question-block">
-        <div class="question-heading">
-          <h2>Question 1</h2>
-          <span>4 points</span>
-        </div>
-        <p>Solve the equation: <strong>3x + 7 = 22</strong>. Show your calculation.</p>
-        <label for="answer-one">Your answer</label>
-        <textarea id="answer-one" rows="6" placeholder="Write your answer here..."></textarea>
-      </div>
+    <form class="panel form-stack" method="post">
+      {% csrf_token %}
 
-      <div class="question-block">
+      <section class="question-block">
         <div class="question-heading">
-          <h2>Question 2</h2>
-          <span>6 points</span>
+          <h2>Student name</h2>
         </div>
-        <p>Explain how you can check whether your answer to an equation is correct.</p>
-        <label for="answer-two">Your answer</label>
-        <textarea id="answer-two" rows="7" placeholder="Write your answer here..."></textarea>
-      </div>
+        <p>Enter the name that should be stored with this submission.</p>
 
-      <button class="primary-button align-start" type="button">Submit test</button>
-      <p class="form-note">Answers are not saved during the frontend-only phase.</p>
+        <div class="field-row">
+          <div>
+            <label for="{{ form.student_first_name.id_for_label }}">First name</label>
+            <input
+              id="{{ form.student_first_name.id_for_label }}"
+              name="{{ form.student_first_name.html_name }}"
+              type="text"
+              value="{{ form.student_first_name.value|default:'' }}"
+              maxlength="150"
+              {% if not can_take_test %}disabled{% endif %}
+              required
+            >
+            {% for error in form.student_first_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+          <div>
+            <label for="{{ form.student_last_name.id_for_label }}">Last name</label>
+            <input
+              id="{{ form.student_last_name.id_for_label }}"
+              name="{{ form.student_last_name.html_name }}"
+              type="text"
+              value="{{ form.student_last_name.value|default:'' }}"
+              maxlength="150"
+              {% if not can_take_test %}disabled{% endif %}
+              required
+            >
+            {% for error in form.student_last_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+          </div>
+        </div>
+      </section>
+
+      {% for question, field in question_fields %}
+        <section class="question-block">
+          <div class="question-heading">
+            <h2>{{ question.title }}</h2>
+            <span>{{ question.points }} points · {{ question.get_answer_type_display }}</span>
+          </div>
+          <p>{{ question.description }}</p>
+
+          {% if question.answer_type == "multiple_choice" %}
+            <fieldset class="choice-list">
+              <legend>{{ field.label }}</legend>
+              {% for radio in field %}
+                <label class="choice-option" for="{{ radio.id_for_label }}">
+                  {{ radio.tag }}
+                  <span>{{ radio.choice_label }}</span>
+                </label>
+              {% endfor %}
+            </fieldset>
+          {% else %}
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            <textarea
+              id="{{ field.id_for_label }}"
+              name="{{ field.html_name }}"
+              rows="6"
+              {% if not can_take_test %}disabled{% endif %}
+              required
+            >{{ field.value|default:'' }}</textarea>
+          {% endif %}
+
+          {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+        </section>
+      {% endfor %}
+
+      <button class="primary-button align-start" type="submit" {% if not can_take_test %}disabled{% endif %}>
+        {% if existing_submission %}Already submitted{% elif not test.is_active %}Test inactive{% else %}Submit test{% endif %}
+      </button>
     </form>
 
     <aside class="panel detail-panel">
-      <h2>Student details</h2>
+      <h2>Test details</h2>
       <dl>
-        <dt>Name</dt>
+        <dt>Signed-in user</dt>
         <dd>{{ request.user.get_full_name|default:request.user.email }}</dd>
         <dt>E-mail</dt>
         <dd>{{ request.user.email }}</dd>
         <dt>Questions</dt>
-        <dd>2</dd>
+        <dd>{{ test.questions.count }}</dd>
         <dt>Total points</dt>
-        <dd>10</dd>
+        <dd>{{ test.total_points }}</dd>
+        <dt>Remaining time at submission</dt>
+        <dd>Not tracked yet</dd>
+        {% if display_submission %}
+          <dt>Submitted at</dt>
+          <dd>{{ display_submission.submitted_at|date:"j F Y, H:i" }}</dd>
+        {% endif %}
       </dl>
     </aside>
   </div>

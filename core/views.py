@@ -1,35 +1,20 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpResponseForbidden
-from django.shortcuts import redirect, render
+from django.http import HttpResponseForbidden
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 
-from .forms import AccountInfoForm, RegistrationForm
-from .models import User
+from .forms import (
+    AccountInfoForm,
+    RegistrationForm,
+    TestActivationForm,
+    TestSubmissionForm,
+)
+from .models import Test, TestSubmission, User
 
 
-SAMPLE_TESTS = [
-    {
-        "id": 1,
-        "title": "Mathematics - Algebra",
-        "date": "18 June 2026",
-        "length": "45 minutes",
-        "status": "Active",
-    },
-    {
-        "id": 2,
-        "title": "Biology - Cell Structure",
-        "date": "23 June 2026",
-        "length": "60 minutes",
-        "status": "Active",
-    },
-    {
-        "id": 3,
-        "title": "History - Industrial Revolution",
-        "date": "10 June 2026",
-        "length": "40 minutes",
-        "status": "Completed",
-    },
-]
+def teacher_required(user):
+    return user.role == User.Role.TEACHER
 
 
 def login_page(request):
@@ -67,29 +52,92 @@ def registration_page(request):
 
 @login_required
 def test_overview(request):
+    tests = Test.objects.prefetch_related("questions").all()
+    submitted_test_ids = set(
+        TestSubmission.objects.filter(
+            student=request.user,
+            status=TestSubmission.Status.SUBMITTED,
+        ).values_list("test_id", flat=True)
+    )
+
     return render(
         request,
         "core/test_overview.html",
-        {"active_page": "overview", "tests": SAMPLE_TESTS},
+        {
+            "active_page": "overview",
+            "submitted_test_ids": submitted_test_ids,
+            "tests": tests,
+        },
     )
 
 
 @login_required
+def toggle_test_activation(request, test_id):
+    if not teacher_required(request.user):
+        return HttpResponseForbidden("Only teacher accounts can change test status.")
+    if request.method != "POST":
+        return redirect("test-overview")
+
+    test = get_object_or_404(Test, pk=test_id)
+    form = TestActivationForm(request.POST, instance=test)
+    if form.is_valid():
+        form.save()
+
+    return redirect("test-overview")
+
+
+@login_required
 def test_detail(request, test_id):
-    test = next((item for item in SAMPLE_TESTS if item["id"] == test_id), None)
-    if test is None:
-        raise Http404("Test not found.")
+    test = get_object_or_404(Test.objects.prefetch_related("questions"), pk=test_id)
+    existing_submission = TestSubmission.objects.filter(
+        test=test,
+        student=request.user,
+        status=TestSubmission.Status.SUBMITTED,
+    ).prefetch_related("answers").first()
+    latest_submission = (
+        TestSubmission.objects.filter(test=test, student=request.user)
+        .prefetch_related("answers")
+        .first()
+    )
+    can_take_test = test.is_active and existing_submission is None
+    form = TestSubmissionForm(
+        request.POST or None,
+        test=test,
+        user=request.user,
+        disabled=not can_take_test,
+        initial_submission=existing_submission or latest_submission,
+    )
+    submitted = request.GET.get("submitted") == "1"
+
+    if request.method == "POST" and not can_take_test:
+        return HttpResponseForbidden("This test is not currently available.")
+
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect(f"{request.path}?submitted=1")
 
     return render(
         request,
         "core/test_detail.html",
-        {"active_page": "overview", "test": test},
+        {
+            "active_page": "overview",
+            "form": form,
+            "can_take_test": can_take_test,
+            "display_submission": existing_submission or latest_submission,
+            "existing_submission": existing_submission,
+            "question_fields": [
+                (question, form[form.answer_field_name(question)])
+                for question in form.questions
+            ],
+            "submitted": submitted,
+            "test": test,
+        },
     )
 
 
 @login_required
 def test_creation(request):
-    if request.user.role != User.Role.TEACHER:
+    if not teacher_required(request.user):
         return HttpResponseForbidden("Only teacher accounts can access test creation.")
 
     return render(
@@ -97,6 +145,43 @@ def test_creation(request):
         "core/test_creation.html",
         {"active_page": "creation"},
     )
+
+
+@login_required
+def test_submissions(request):
+    if not teacher_required(request.user):
+        return HttpResponseForbidden("Only teacher accounts can view submissions.")
+
+    tests = (
+        Test.objects.prefetch_related(
+            "questions",
+            "submissions__student",
+            "submissions__answers__question",
+        )
+        .all()
+    )
+
+    return render(
+        request,
+        "core/test_submissions.html",
+        {"active_page": "submissions", "tests": tests},
+    )
+
+
+@login_required
+def reopen_submission(request, submission_id):
+    if not teacher_required(request.user):
+        return HttpResponseForbidden("Only teacher accounts can reopen submissions.")
+    if request.method != "POST":
+        return redirect("test-submissions")
+
+    submission = get_object_or_404(TestSubmission, pk=submission_id)
+    submission.status = TestSubmission.Status.REOPENED
+    submission.reopened_at = timezone.now()
+    submission.reopened_by = request.user
+    submission.save(update_fields=("status", "reopened_at", "reopened_by"))
+
+    return redirect("test-submissions")
 
 
 @login_required

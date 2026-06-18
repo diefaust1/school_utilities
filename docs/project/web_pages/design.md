@@ -14,6 +14,7 @@ The navigation contains:
 
 - Test Overview
 - Test Creation, visible only to teachers
+- Submissions, visible only to teachers, grouped by expandable test boxes
 - Account Info
 
 ## Public Pages

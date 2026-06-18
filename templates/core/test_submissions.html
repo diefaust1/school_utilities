@@ -1,0 +1,70 @@
+{% extends "core/base.html" %}
+
+{% block title %}Submissions{% endblock %}
+
+{% block content %}
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Teacher workspace</p>
+      <h1>Submissions</h1>
+      <p class="page-intro">Click a test to expand and review student submissions.</p>
+    </div>
+  </header>
+
+  <div class="submission-list">
+    {% for test in tests %}
+      <details class="panel submission-card">
+        <summary class="submission-summary">
+          <span>
+            <strong>{{ test.title }}</strong>
+            <small>{{ test.date|date:"j F Y" }} · {{ test.length_minutes }} minutes · {{ test.submissions.count }} submissions</small>
+          </span>
+          {% if test.is_active %}
+            <span class="status status-active">Active</span>
+          {% else %}
+            <span class="status status-completed">Not active</span>
+          {% endif %}
+        </summary>
+
+        <div class="test-submission-groups">
+          {% for submission in test.submissions.all %}
+            <article class="submission-entry {% if submission.status == 'reopened' %}submission-reopened{% endif %}">
+              <header class="submission-entry-header">
+                <div>
+                  <h3>{{ submission.student_first_name }} {{ submission.student_last_name }}</h3>
+                  <p>{{ submission.student.email }}</p>
+                </div>
+                <div class="submission-actions">
+                  <span class="status {% if submission.status == 'submitted' %}status-submitted{% else %}status-reopened{% endif %}">
+                    {{ submission.get_status_display }}
+                  </span>
+                  <span>{{ submission.submitted_at|date:"j F Y, H:i" }}</span>
+                  {% if submission.status == "submitted" %}
+                    <form class="inline-form" action="{% url 'reopen-submission' submission.id %}" method="post">
+                      {% csrf_token %}
+                      <button class="secondary-button" type="submit">Reopen</button>
+                    </form>
+                  {% endif %}
+                </div>
+              </header>
+
+              <div class="answer-list">
+                {% for answer in submission.answers.all %}
+                  <section>
+                    <h4>{{ answer.question.title }}</h4>
+                    <p class="answer-meta">{{ answer.question.points }} points · {{ answer.question.get_answer_type_display }}</p>
+                    <p>{{ answer.answer_text }}</p>
+                  </section>
+                {% endfor %}
+              </div>
+            </article>
+          {% empty %}
+            <p class="empty-state">No students have submitted this test yet.</p>
+          {% endfor %}
+        </div>
+      </details>
+    {% empty %}
+      <p class="empty-state">No tests are available yet.</p>
+    {% endfor %}
+  </div>
+{% endblock %}

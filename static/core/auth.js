@@ -20,6 +20,7 @@ authForms.forEach((form) => {
 
     const submitButton = form.querySelector('button[type="submit"]');
     submitButton.disabled = true;
+    submitButton.classList.add("is-loading");
     submitButton.textContent = "Please wait...";
   });
 });

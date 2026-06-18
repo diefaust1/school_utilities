@@ -6,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Auto Grader | {% block title %}{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'core/app.css' %}">
+    <script src="{% static 'core/pdf.js' %}" defer></script>
   </head>
   <body>
     <div class="app-shell">
@@ -22,6 +23,9 @@
           {% if request.user.role == "teacher" %}
             <a class="{% if active_page == 'creation' %}active{% endif %}" href="{% url 'test-creation' %}">
               Test Creation
+            </a>
+            <a class="{% if active_page == 'submissions' %}active{% endif %}" href="{% url 'test-submissions' %}">
+              Submissions
             </a>
           {% endif %}
           <a class="{% if active_page == 'account' %}active{% endif %}" href="{% url 'account-info' %}">

@@ -1,7 +1,7 @@
-from django.test import TestCase
-from django.urls import reverse
+from django.test import TestCase  # type: ignore[import]
+from django.urls import reverse  # type: ignore[import]
 
-from .models import User
+from .models import Question, StudentAnswer, Test, TestSubmission, User
 
 
 class AccountTests(TestCase):
@@ -165,6 +165,352 @@ class PageAccessTests(TestCase):
         response = self.client.get(reverse("test-creation"))
 
         self.assertContains(response, "Test Creation")
+
+    def test_everyone_can_see_database_backed_tests(self):
+        self.client.force_login(self.student)
+
+        response = self.client.get(reverse("test-overview"))
+
+        self.assertContains(response, "Mathematics - Basics")
+        self.assertContains(response, "Biology - Cell Structure")
+        self.assertContains(response, "45 minutes")
+
+    def test_seeded_tests_have_three_complete_questions(self):
+        tests = Test.objects.filter(
+            title__in=["Mathematics - Basics", "Biology - Cell Structure"]
+        )
+
+        self.assertEqual(tests.count(), 2)
+
+        for test in tests:
+            self.assertEqual(test.questions.count(), 3)
+            self.assertEqual(
+                test.questions.filter(answer_type=Question.AnswerType.MULTIPLE_CHOICE).count(),
+                2,
+            )
+            self.assertEqual(
+                test.questions.filter(answer_type=Question.AnswerType.FREE_TEXT).count(),
+                1,
+            )
+
+            for question in test.questions.all():
+                self.assertTrue(question.title)
+                self.assertTrue(question.description)
+                self.assertGreater(question.points, 0)
+                self.assertIn(question.answer_type, Question.AnswerType.values)
+
+    def test_biology_test_can_be_opened(self):
+        self.client.force_login(self.student)
+        test = Test.objects.get(title="Biology - Cell Structure")
+
+        response = self.client.get(reverse("test-detail", args=[test.pk]))
+
+        self.assertContains(response, "Cell Organelle")
+        self.assertContains(response, "Explain Cell Membranes")
+
+    def test_student_can_submit_test_with_name_and_answers(self):
+        self.client.force_login(self.student)
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+
+        response = self.client.post(
+            reverse("test-detail", args=[test.pk]),
+            {
+                "student_first_name": "Submitted",
+                "student_last_name": "Student",
+                f"question_{questions[0].pk}": "B",
+                f"question_{questions[1].pk}": "C",
+                f"question_{questions[2].pk}": "Because substituting the value should make both sides equal.",
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('test-detail', args=[test.pk])}?submitted=1")
+        submission = TestSubmission.objects.get(test=test, student=self.student)
+        self.assertEqual(submission.student_first_name, "Submitted")
+        self.assertEqual(submission.student_last_name, "Student")
+        self.assertEqual(submission.answers.count(), 3)
+        self.assertTrue(
+            StudentAnswer.objects.filter(
+                submission=submission,
+                question=questions[2],
+                answer_text__contains="substituting",
+            ).exists()
+        )
+
+    def test_submitted_test_is_marked_on_overview(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Example",
+            student_last_name="Student",
+        )
+        self.client.force_login(self.student)
+
+        response = self.client.get(reverse("test-overview"))
+
+        self.assertContains(response, "Submitted")
+        self.assertContains(response, "test-card-submitted")
+
+    def test_submitted_test_detail_keeps_saved_answers_visible(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+        submission = TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Saved",
+            student_last_name="Student",
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[0],
+            answer_text="B",
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[1],
+            answer_text="C",
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[2],
+            answer_text="A saved free-text answer.",
+        )
+        self.client.force_login(self.student)
+
+        response = self.client.get(reverse("test-detail", args=[test.pk]))
+
+        self.assertContains(response, 'value="Saved"')
+        self.assertContains(response, 'value="Student"')
+        self.assertContains(response, "A saved free-text answer.")
+        self.assertContains(response, "Already submitted")
+        self.assertContains(response, "disabled")
+        self.assertContains(response, "Save as PDF")
+
+    def test_reopened_test_prefills_previous_name_and_answers(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+        submission = TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Previous",
+            student_last_name="Name",
+            status=TestSubmission.Status.REOPENED,
+            reopened_by=self.teacher,
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[0],
+            answer_text="B",
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[1],
+            answer_text="C",
+        )
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=questions[2],
+            answer_text="Previous answer.",
+        )
+        self.client.force_login(self.student)
+
+        response = self.client.get(reverse("test-detail", args=[test.pk]))
+
+        self.assertContains(response, 'value="Previous"')
+        self.assertContains(response, 'value="Name"')
+        self.assertContains(response, "Previous answer.")
+        self.assertContains(response, "Submit test")
+        self.assertNotContains(response, "Already submitted")
+
+    def test_student_cannot_submit_same_test_twice(self):
+        self.client.force_login(self.student)
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+        TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Example",
+            student_last_name="Student",
+        )
+
+        response = self.client.post(
+            reverse("test-detail", args=[test.pk]),
+            {
+                "student_first_name": "Again",
+                "student_last_name": "Student",
+                f"question_{questions[0].pk}": "B",
+                f"question_{questions[1].pk}": "C",
+                f"question_{questions[2].pk}": "Again.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertEqual(
+            TestSubmission.objects.filter(test=test, student=self.student).count(),
+            1,
+        )
+
+    def test_inactive_test_cannot_be_submitted(self):
+        self.client.force_login(self.student)
+        test = Test.objects.get(title="Mathematics - Basics")
+        test.is_active = False
+        test.save(update_fields=("is_active",))
+        questions = list(test.questions.all())
+
+        response = self.client.post(
+            reverse("test-detail", args=[test.pk]),
+            {
+                "student_first_name": "Example",
+                "student_last_name": "Student",
+                f"question_{questions[0].pk}": "B",
+                f"question_{questions[1].pk}": "C",
+                f"question_{questions[2].pk}": "Inactive.",
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(TestSubmission.objects.exists())
+
+    def test_teacher_can_reopen_submission_and_student_can_submit_again(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+        submission = TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Example",
+            student_last_name="Student",
+        )
+        self.client.force_login(self.teacher)
+
+        response = self.client.post(reverse("reopen-submission", args=[submission.pk]))
+
+        self.assertRedirects(response, reverse("test-submissions"))
+        submission.refresh_from_db()
+        self.assertEqual(submission.status, TestSubmission.Status.REOPENED)
+        self.assertEqual(submission.reopened_by, self.teacher)
+
+        self.client.force_login(self.student)
+        response = self.client.post(
+            reverse("test-detail", args=[test.pk]),
+            {
+                "student_first_name": "Second",
+                "student_last_name": "Attempt",
+                f"question_{questions[0].pk}": "B",
+                f"question_{questions[1].pk}": "C",
+                f"question_{questions[2].pk}": "Second attempt.",
+            },
+        )
+
+        self.assertRedirects(response, f"{reverse('test-detail', args=[test.pk])}?submitted=1")
+        self.assertEqual(
+            TestSubmission.objects.filter(test=test, student=self.student).count(),
+            2,
+        )
+        self.assertTrue(
+            TestSubmission.objects.filter(
+                test=test,
+                student=self.student,
+                status=TestSubmission.Status.SUBMITTED,
+                student_first_name="Second",
+            ).exists()
+        )
+
+    def test_teacher_can_deactivate_and_activate_test(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        self.client.force_login(self.teacher)
+
+        response = self.client.post(
+            reverse("toggle-test-activation", args=[test.pk]),
+            {"is_active": "false"},
+        )
+
+        self.assertRedirects(response, reverse("test-overview"))
+        test.refresh_from_db()
+        self.assertFalse(test.is_active)
+
+        response = self.client.post(
+            reverse("toggle-test-activation", args=[test.pk]),
+            {"is_active": "true"},
+        )
+
+        self.assertRedirects(response, reverse("test-overview"))
+        test.refresh_from_db()
+        self.assertTrue(test.is_active)
+
+    def test_teacher_sees_activation_button_on_overview(self):
+        self.client.force_login(self.teacher)
+
+        response = self.client.get(reverse("test-overview"))
+
+        self.assertContains(response, "Deactivate test")
+
+    def test_student_cannot_toggle_test_activation_or_reopen(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        submission = TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Example",
+            student_last_name="Student",
+        )
+        self.client.force_login(self.student)
+
+        activation_response = self.client.post(
+            reverse("toggle-test-activation", args=[test.pk]),
+            {"is_active": "false"},
+        )
+        reopen_response = self.client.post(reverse("reopen-submission", args=[submission.pk]))
+
+        self.assertEqual(activation_response.status_code, 403)
+        self.assertEqual(reopen_response.status_code, 403)
+
+    def test_submission_requires_all_answers(self):
+        self.client.force_login(self.student)
+        test = Test.objects.get(title="Mathematics - Basics")
+        questions = list(test.questions.all())
+
+        response = self.client.post(
+            reverse("test-detail", args=[test.pk]),
+            {
+                "student_first_name": "Submitted",
+                "student_last_name": "Student",
+                f"question_{questions[0].pk}": "B",
+            },
+        )
+
+        self.assertContains(response, "This field is required.")
+        self.assertFalse(TestSubmission.objects.exists())
+
+    def test_teacher_can_view_saved_submissions(self):
+        test = Test.objects.get(title="Mathematics - Basics")
+        submission = TestSubmission.objects.create(
+            test=test,
+            student=self.student,
+            student_first_name="Example",
+            student_last_name="Student",
+        )
+        question = test.questions.first()
+        StudentAnswer.objects.create(
+            submission=submission,
+            question=question,
+            answer_text="B",
+        )
+        self.client.force_login(self.teacher)
+
+        response = self.client.get(reverse("test-submissions"))
+
+        self.assertContains(response, "Example Student")
+        self.assertContains(response, "Mathematics - Basics")
+        self.assertContains(response, "<details", html=False)
+        self.assertContains(response, "Reopen")
+        self.assertContains(response, "B")
+
+    def test_student_cannot_view_saved_submissions(self):
+        self.client.force_login(self.student)
+
+        response = self.client.get(reverse("test-submissions"))
+
+        self.assertEqual(response.status_code, 403)
 
     def test_user_can_update_first_and_last_name(self):
         self.client.force_login(self.student)

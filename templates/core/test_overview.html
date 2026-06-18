@@ -26,15 +26,39 @@
 
     <div class="card-grid">
       {% for test in tests %}
-        <a class="test-card" href="{% url 'test-detail' test.id %}">
-          <div class="card-topline">
-            <span class="status status-{{ test.status|lower }}">{{ test.status }}</span>
-            <span>{{ test.length }}</span>
-          </div>
-          <h3>{{ test.title }}</h3>
-          <p>{{ test.date }}</p>
-          <span class="card-action">Open test <span aria-hidden="true">&rarr;</span></span>
-        </a>
+        <article class="test-card {% if test.id in submitted_test_ids %}test-card-submitted{% elif not test.is_active %}test-card-inactive{% endif %}">
+          <a class="test-card-link" href="{% url 'test-detail' test.id %}">
+            <div class="card-topline">
+              {% if test.id in submitted_test_ids %}
+                <span class="status status-submitted">Submitted</span>
+              {% elif test.is_active %}
+                <span class="status status-active">Active</span>
+              {% else %}
+                <span class="status status-completed">Not active</span>
+              {% endif %}
+              <span>{{ test.length_minutes }} minutes</span>
+            </div>
+            <h3>{{ test.title }}</h3>
+            <p>{{ test.date|date:"j F Y" }}</p>
+            {% if test.id in submitted_test_ids %}
+              <span class="card-action">View submission status <span aria-hidden="true">&rarr;</span></span>
+            {% else %}
+              <span class="card-action">Open test <span aria-hidden="true">&rarr;</span></span>
+            {% endif %}
+          </a>
+
+          {% if request.user.role == "teacher" %}
+            <form class="test-card-actions" action="{% url 'toggle-test-activation' test.id %}" method="post">
+              {% csrf_token %}
+              <input type="hidden" name="is_active" value="{% if test.is_active %}false{% else %}true{% endif %}">
+              <button class="secondary-button" type="submit">
+                {% if test.is_active %}Deactivate test{% else %}Activate test{% endif %}
+              </button>
+            </form>
+          {% endif %}
+        </article>
+      {% empty %}
+        <p class="empty-state">No tests are available yet.</p>
       {% endfor %}
     </div>
   </section>

@@ -9,6 +9,9 @@ urlpatterns = [
     path("tests/", views.test_overview, name="test-overview"),
     path("tests/<int:test_id>/", views.test_detail, name="test-detail"),
     path("tests/create/", views.test_creation, name="test-creation"),
+    path("submissions/", views.test_submissions, name="test-submissions"),
+    path("submissions/<int:submission_id>/reopen/", views.reopen_submission, name="reopen-submission"),
+    path("tests/<int:test_id>/activation/", views.toggle_test_activation, name="toggle-test-activation"),
     path("account/", views.account_info, name="account-info"),
     path("logout/", views.logout_page, name="logout"),
 ]
