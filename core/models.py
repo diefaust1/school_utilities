@@ -142,6 +142,8 @@ class TestSubmission(models.Model):
         on_delete=models.SET_NULL,
         related_name="reopened_submissions",
     )
+    reopen_duration_seconds = models.PositiveIntegerField(blank=True, null=True)
+    remaining_seconds = models.PositiveIntegerField(blank=True, null=True)
 
     class Meta:
         ordering = ("-submitted_at",)
@@ -164,3 +166,67 @@ class StudentAnswer(models.Model):
 
     def __str__(self):
         return f"Answer to {self.question}"
+
+
+class TestAttempt(models.Model):
+    class Status(models.TextChoices):
+        IN_PROGRESS = "in_progress", "In progress"
+        SUBMITTED = "submitted", "Submitted"
+
+    test = models.ForeignKey(Test, on_delete=models.CASCADE, related_name="attempts")
+    student = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="test_attempts",
+    )
+    source_submission = models.ForeignKey(
+        TestSubmission,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="reopened_attempts",
+    )
+    submitted_submission = models.OneToOneField(
+        TestSubmission,
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+        related_name="source_attempt",
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    duration_seconds = models.PositiveIntegerField()
+    student_first_name = models.CharField(max_length=150, blank=True)
+    student_last_name = models.CharField(max_length=150, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.IN_PROGRESS,
+    )
+
+    class Meta:
+        ordering = ("-started_at",)
+
+    def __str__(self):
+        return f"{self.student} - {self.test} ({self.get_status_display()})"
+
+
+class TestAttemptAnswer(models.Model):
+    attempt = models.ForeignKey(
+        TestAttempt,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    question = models.ForeignKey(Question, on_delete=models.CASCADE)
+    answer_text = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ("question_id",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=("attempt", "question"),
+                name="unique_attempt_answer_question",
+            )
+        ]
+
+    def __str__(self):
+        return f"Draft answer to {self.question}"

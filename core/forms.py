@@ -1,7 +1,6 @@
 from django import forms
-from django.db import transaction
 
-from .models import Question, StudentAnswer, Test, TestSubmission, User
+from .models import Question, Test, TestAttempt, TestSubmission, User
 
 
 class RegistrationForm(forms.Form):
@@ -51,8 +50,8 @@ class TestActivationForm(forms.ModelForm):
 
 
 class TestSubmissionForm(forms.Form):
-    student_first_name = forms.CharField(max_length=150)
-    student_last_name = forms.CharField(max_length=150)
+    student_first_name = forms.CharField(max_length=150, required=False)
+    student_last_name = forms.CharField(max_length=150, required=False)
 
     def __init__(
         self,
@@ -61,6 +60,7 @@ class TestSubmissionForm(forms.Form):
         user: User,
         disabled: bool = False,
         initial_submission: TestSubmission | None = None,
+        initial_attempt: TestAttempt | None = None,
         **kwargs,
     ):
         super().__init__(*args, **kwargs)
@@ -75,15 +75,24 @@ class TestSubmissionForm(forms.Form):
                 answer.question_id: answer.answer_text
                 for answer in initial_submission.answers.all()
             }
+        elif initial_attempt is not None:
+            answer_initials = {
+                answer.question_id: answer.answer_text
+                for answer in initial_attempt.answers.all()
+            }
 
         self.fields["student_first_name"].initial = (
             initial_submission.student_first_name
             if initial_submission is not None
+            else initial_attempt.student_first_name
+            if initial_attempt is not None
             else user.first_name
         )
         self.fields["student_last_name"].initial = (
             initial_submission.student_last_name
             if initial_submission is not None
+            else initial_attempt.student_last_name
+            if initial_attempt is not None
             else user.last_name
         )
 
@@ -95,11 +104,13 @@ class TestSubmissionForm(forms.Form):
                 self.fields[field_name] = forms.ChoiceField(
                     choices=question.options,
                     label=label,
+                    required=False,
                     widget=forms.RadioSelect,
                 )
             else:
                 self.fields[field_name] = forms.CharField(
                     label=label,
+                    required=False,
                     widget=forms.Textarea(attrs={"rows": 6}),
                 )
 
@@ -116,27 +127,3 @@ class TestSubmissionForm(forms.Form):
     @staticmethod
     def answer_field_name(question: Question) -> str:
         return f"question_{question.id}"
-
-    @transaction.atomic
-    def save(self) -> TestSubmission:
-        if not self.is_valid():
-            raise ValueError("TestSubmissionForm.save() requires a valid form.")
-
-        submission = TestSubmission.objects.create(
-            test=self.test,
-            student=self.user,
-            student_first_name=self.cleaned_data["student_first_name"],
-            student_last_name=self.cleaned_data["student_last_name"],
-            status=TestSubmission.Status.SUBMITTED,
-        )
-
-        answers = [
-            StudentAnswer(
-                submission=submission,
-                question=question,
-                answer_text=self.cleaned_data[self.answer_field_name(question)],
-            )
-            for question in self.questions
-        ]
-        StudentAnswer.objects.bulk_create(answers)
-        return submission

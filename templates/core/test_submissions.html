@@ -7,19 +7,19 @@
     <div>
       <p class="eyebrow">Teacher workspace</p>
       <h1>Submissions</h1>
-      <p class="page-intro">Click a test to expand and review student submissions.</p>
+      <p class="page-intro">Click a test, then click a student submission to review the full test.</p>
     </div>
   </header>
 
   <div class="submission-list">
-    {% for test in tests %}
+    {% for review_test in review_tests %}
       <details class="panel submission-card">
         <summary class="submission-summary">
           <span>
-            <strong>{{ test.title }}</strong>
-            <small>{{ test.date|date:"j F Y" }} · {{ test.length_minutes }} minutes · {{ test.submissions.count }} submissions</small>
+            <strong>{{ review_test.test.title }}</strong>
+            <small>{{ review_test.test.date|date:"j F Y" }} &middot; {{ review_test.test.length_minutes }} minutes &middot; {{ review_test.submissions|length }} submissions</small>
           </span>
-          {% if test.is_active %}
+          {% if review_test.test.is_active %}
             <span class="status status-active">Active</span>
           {% else %}
             <span class="status status-completed">Not active</span>
@@ -27,37 +27,82 @@
         </summary>
 
         <div class="test-submission-groups">
-          {% for submission in test.submissions.all %}
-            <article class="submission-entry {% if submission.status == 'reopened' %}submission-reopened{% endif %}">
-              <header class="submission-entry-header">
-                <div>
-                  <h3>{{ submission.student_first_name }} {{ submission.student_last_name }}</h3>
-                  <p>{{ submission.student.email }}</p>
-                </div>
-                <div class="submission-actions">
-                  <span class="status {% if submission.status == 'submitted' %}status-submitted{% else %}status-reopened{% endif %}">
-                    {{ submission.get_status_display }}
-                  </span>
-                  <span>{{ submission.submitted_at|date:"j F Y, H:i" }}</span>
-                  {% if submission.status == "submitted" %}
-                    <form class="inline-form" action="{% url 'reopen-submission' submission.id %}" method="post">
-                      {% csrf_token %}
-                      <button class="secondary-button" type="submit">Reopen</button>
-                    </form>
-                  {% endif %}
-                </div>
-              </header>
+          {% for review_submission in review_test.submissions %}
+            <details
+              class="submission-entry {% if review_submission.submission.status == 'reopened' %}submission-reopened{% endif %}"
+              data-submission-print-section
+            >
+              <summary class="student-submission-summary">
+                <span>
+                  <strong>{{ review_submission.submission.student_first_name }} {{ review_submission.submission.student_last_name }}</strong>
+                  <small>{{ review_submission.submission.submitted_at|date:"j F Y, H:i" }}</small>
+                </span>
+                <span class="status {{ review_submission.status_class }}">
+                  {{ review_submission.submission.get_status_display }}
+                </span>
+              </summary>
 
-              <div class="answer-list">
-                {% for answer in submission.answers.all %}
-                  <section>
-                    <h4>{{ answer.question.title }}</h4>
-                    <p class="answer-meta">{{ answer.question.points }} points · {{ answer.question.get_answer_type_display }}</p>
-                    <p>{{ answer.answer_text }}</p>
-                  </section>
-                {% endfor %}
+              <div class="student-submission-detail">
+                <header class="submission-entry-header">
+                  <div>
+                    <p class="eyebrow">Student Submission</p>
+                    <h3>{{ review_submission.submission.student_first_name }} {{ review_submission.submission.student_last_name }}</h3>
+                    <p>{{ review_submission.submission.student.email }}</p>
+                  </div>
+                  <div class="submission-actions submission-print-actions">
+                    <button class="secondary-button print-action" type="button" data-print-submission>
+                      Save as PDF
+                    </button>
+                    {% if review_submission.can_reopen %}
+                      <form class="inline-form" action="{% url 'reopen-submission' review_submission.submission.id %}" method="post">
+                        {% csrf_token %}
+                        <button class="secondary-button" type="submit">Reopen</button>
+                        <label class="reopen-duration-field">
+                          <span>Minutes</span>
+                          <input name="reopen_minutes" type="number" min="1" value="5">
+                        </label>
+                      </form>
+                    {% endif %}
+                  </div>
+                </header>
+
+                <dl class="submission-meta">
+                  <div>
+                    <dt>Test</dt>
+                    <dd>{{ review_test.test.title }}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{{ review_submission.submission.get_status_display }}</dd>
+                  </div>
+                  <div>
+                    <dt>Submitted at</dt>
+                    <dd>{{ review_submission.submission.submitted_at|date:"j F Y, H:i" }}</dd>
+                  </div>
+                  <div>
+                    <dt>Time limit</dt>
+                    <dd>{{ review_test.test.length_minutes }} minutes</dd>
+                  </div>
+                  <div>
+                    <dt>Time remaining</dt>
+                    <dd>{{ review_submission.remaining_time_display }}</dd>
+                  </div>
+                </dl>
+
+                <div class="answer-list full-test-review">
+                  {% for review_question in review_submission.questions %}
+                    <section>
+                      <div class="question-heading">
+                        <h4>{{ review_question.question.title }}</h4>
+                        <span>{{ review_question.question.points }} points &middot; {{ review_question.question.get_answer_type_display }}</span>
+                      </div>
+                      <p>{{ review_question.question.description }}</p>
+                      <div class="student-answer-display">{{ review_question.answer_text }}</div>
+                    </section>
+                  {% endfor %}
+                </div>
               </div>
-            </article>
+            </details>
           {% empty %}
             <p class="empty-state">No students have submitted this test yet.</p>
           {% endfor %}

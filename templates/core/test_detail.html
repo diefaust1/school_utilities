@@ -11,9 +11,15 @@
       <p class="page-intro">{{ test.date|date:"j F Y" }} · {{ test.length_minutes }} minutes</p>
     </div>
     <div class="test-header-actions">
-      <div class="timer-card">
-        <span>Time limit</span>
-        <strong>{{ test.length_minutes }} min</strong>
+      <div class="timer-card" {% if remaining_seconds is not None %}data-test-timer data-remaining-seconds="{{ remaining_seconds }}"{% endif %}>
+        <span>{% if remaining_seconds is not None %}Time remaining{% else %}Time limit{% endif %}</span>
+        <strong data-test-timer-display>
+          {% if remaining_seconds is not None %}
+            {{ remaining_seconds }} sec
+          {% else %}
+            {{ test.length_minutes }} min
+          {% endif %}
+        </strong>
       </div>
       <button class="secondary-button print-action" type="button" data-print-test>Save as PDF</button>
     </div>
@@ -30,7 +36,14 @@
   {% endif %}
 
   <div class="content-grid">
-    <form class="panel form-stack" method="post">
+    <form
+      class="panel form-stack"
+      method="post"
+      {% if remaining_seconds is not None %}
+        data-test-attempt-form
+        data-autosave-url="{% url 'autosave-test-attempt' test.id %}"
+      {% endif %}
+    >
       {% csrf_token %}
 
       <section class="question-block">
@@ -49,7 +62,6 @@
               value="{{ form.student_first_name.value|default:'' }}"
               maxlength="150"
               {% if not can_take_test %}disabled{% endif %}
-              required
             >
             {% for error in form.student_first_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
           </div>
@@ -62,7 +74,6 @@
               value="{{ form.student_last_name.value|default:'' }}"
               maxlength="150"
               {% if not can_take_test %}disabled{% endif %}
-              required
             >
             {% for error in form.student_last_name.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
           </div>
@@ -94,7 +105,6 @@
               name="{{ field.html_name }}"
               rows="6"
               {% if not can_take_test %}disabled{% endif %}
-              required
             >{{ field.value|default:'' }}</textarea>
           {% endif %}
 
@@ -119,7 +129,15 @@
         <dt>Total points</dt>
         <dd>{{ test.total_points }}</dd>
         <dt>Remaining time at submission</dt>
-        <dd>Not tracked yet</dd>
+        <dd>
+          {% if display_submission and display_submission.remaining_seconds is not None %}
+            {{ display_submission.remaining_seconds }} seconds
+          {% elif remaining_seconds is not None %}
+            In progress
+          {% else %}
+            Not tracked yet
+          {% endif %}
+        </dd>
         {% if display_submission %}
           <dt>Submitted at</dt>
           <dd>{{ display_submission.submitted_at|date:"j F Y, H:i" }}</dd>

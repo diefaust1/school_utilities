@@ -7,7 +7,7 @@
     <div>
       <p class="eyebrow">Student workspace</p>
       <h1>Test Overview</h1>
-      <p class="page-intro">Open an active test or review the status of your recent tests.</p>
+      <p class="page-intro">Start an active test, continue an attempt, or review the status of your recent tests.</p>
     </div>
     <div class="user-summary">
       <span class="avatar" aria-hidden="true">ES</span>
@@ -27,10 +27,16 @@
     <div class="card-grid">
       {% for test in tests %}
         <article class="test-card {% if test.id in submitted_test_ids %}test-card-submitted{% elif not test.is_active %}test-card-inactive{% endif %}">
-          <a class="test-card-link" href="{% url 'test-detail' test.id %}">
+          {% if can_use_teacher_tools %}
+            <a class="test-card-link" href="{% url 'test-detail' test.id %}">
+          {% else %}
+            <div class="test-card-link">
+          {% endif %}
             <div class="card-topline">
               {% if test.id in submitted_test_ids %}
                 <span class="status status-submitted">Submitted</span>
+              {% elif test.id in in_progress_test_ids %}
+                <span class="status status-active">In progress</span>
               {% elif test.is_active %}
                 <span class="status status-active">Active</span>
               {% else %}
@@ -40,19 +46,36 @@
             </div>
             <h3>{{ test.title }}</h3>
             <p>{{ test.date|date:"j F Y" }}</p>
-            {% if test.id in submitted_test_ids %}
-              <span class="card-action">View submission status <span aria-hidden="true">&rarr;</span></span>
-            {% else %}
-              <span class="card-action">Open test <span aria-hidden="true">&rarr;</span></span>
+            {% if can_use_teacher_tools %}
+              <span class="card-action">Preview test <span aria-hidden="true">&rarr;</span></span>
             {% endif %}
-          </a>
+          {% if can_use_teacher_tools %}
+            </a>
+          {% else %}
+            </div>
+          {% endif %}
 
-          {% if request.user.role == "teacher" %}
+          {% if can_use_teacher_tools %}
             <form class="test-card-actions" action="{% url 'toggle-test-activation' test.id %}" method="post">
               {% csrf_token %}
               <input type="hidden" name="is_active" value="{% if test.is_active %}false{% else %}true{% endif %}">
               <button class="secondary-button" type="submit">
                 {% if test.is_active %}Deactivate test{% else %}Activate test{% endif %}
+              </button>
+            </form>
+          {% elif test.id in submitted_test_ids %}
+            <div class="test-card-actions">
+              <a class="secondary-button card-button-link" href="{% url 'test-detail' test.id %}">View submission</a>
+            </div>
+          {% elif test.id in in_progress_test_ids %}
+            <div class="test-card-actions">
+              <a class="primary-button card-button-link" href="{% url 'test-detail' test.id %}">Continue test</a>
+            </div>
+          {% else %}
+            <form class="test-card-actions" action="{% url 'start-test' test.id %}" method="post">
+              {% csrf_token %}
+              <button class="primary-button" type="submit" {% if not test.is_active %}disabled{% endif %}>
+                {% if test.is_active %}Start test{% else %}Test inactive{% endif %}
               </button>
             </form>
           {% endif %}

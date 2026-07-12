@@ -427,6 +427,14 @@ textarea:focus {
   width: 100%;
 }
 
+.card-button-link {
+  display: grid;
+  width: 100%;
+  place-items: center;
+  text-align: center;
+  text-decoration: none;
+}
+
 .test-card p {
   color: #718096;
 }
@@ -721,6 +729,54 @@ textarea:focus {
   content: "-";
 }
 
+.student-submission-summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.student-submission-summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-submission-summary::before {
+  content: "+";
+  display: grid;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: #285b9c;
+  background: #e7eef8;
+  font-weight: 800;
+}
+
+.submission-entry[open] .student-submission-summary::before {
+  content: "-";
+}
+
+.student-submission-summary span:first-child {
+  display: grid;
+  gap: 5px;
+}
+
+.student-submission-summary small {
+  color: #718096;
+  font-size: 0.84rem;
+}
+
+.student-submission-detail {
+  display: grid;
+  gap: 20px;
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px solid #e2e9f1;
+}
+
 .submission-summary span:first-child {
   display: grid;
   gap: 6px;
@@ -736,6 +792,12 @@ textarea:focus {
   padding: 16px 0;
   border-top: 1px solid #e2e9f1;
   border-bottom: 1px solid #e2e9f1;
+}
+
+.student-submission-detail .submission-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
 }
 
 .submission-meta dt {
@@ -771,6 +833,20 @@ textarea:focus {
   margin: 0;
 }
 
+.reopen-duration-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: #59687b;
+  font-size: 0.82rem;
+}
+
+.reopen-duration-field input {
+  width: 72px;
+  min-height: 38px;
+}
+
 .test-submission-groups {
   display: grid;
   gap: 18px;
@@ -799,6 +875,27 @@ textarea:focus {
   align-items: center;
   justify-content: flex-end;
   gap: 10px;
+}
+
+.submission-actions .inline-form {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.full-test-review section {
+  display: grid;
+  gap: 12px;
+}
+
+.student-answer-display {
+  min-height: 44px;
+  padding: 11px 12px;
+  border: 1px solid #c9d5e3;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #172033;
+  white-space: pre-wrap;
 }
 
 @media (max-width: 850px) {
@@ -916,5 +1013,28 @@ textarea:focus {
   .question-block,
   .answer-list section {
     break-inside: avoid;
+  }
+
+  body.printing-submission * {
+    visibility: hidden;
+  }
+
+  body.printing-submission .is-print-target,
+  body.printing-submission .is-print-target * {
+    visibility: visible;
+  }
+
+  body.printing-submission .is-print-target {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    border: 0;
+    box-shadow: none;
+  }
+
+  body.printing-submission .student-submission-summary,
+  body.printing-submission .submission-print-actions {
+    display: none !important;
   }
 }

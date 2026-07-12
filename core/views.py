@@ -1,20 +1,21 @@
 from django.contrib.auth import authenticate, login, logout
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
+from django.http import HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
 
 from .forms import (
     AccountInfoForm,
     RegistrationForm,
     TestActivationForm,
-    TestSubmissionForm,
 )
-from .models import Test, TestSubmission, User
-
-
-def teacher_required(user):
-    return user.role == User.Role.TEACHER
+from .models import Test, TestSubmission
+from .permissions import can_use_teacher_tools, teacher_action_required
+from .submission_attempts import (
+    SubmissionAttempt,
+    finalize_expired_attempts,
+    start_or_continue_attempt,
+)
+from .teacher_review import load_teacher_review_tests, reopen_submission as reopen_student_submission
 
 
 def login_page(request):
@@ -52,6 +53,9 @@ def registration_page(request):
 
 @login_required
 def test_overview(request):
+    if not can_use_teacher_tools(request.user):
+        finalize_expired_attempts(student=request.user)
+
     tests = Test.objects.prefetch_related("questions").all()
     submitted_test_ids = set(
         TestSubmission.objects.filter(
@@ -59,12 +63,16 @@ def test_overview(request):
             status=TestSubmission.Status.SUBMITTED,
         ).values_list("test_id", flat=True)
     )
+    in_progress_test_ids = set(
+        request.user.test_attempts.filter(status="in_progress").values_list("test_id", flat=True)
+    )
 
     return render(
         request,
         "core/test_overview.html",
         {
             "active_page": "overview",
+            "in_progress_test_ids": in_progress_test_ids,
             "submitted_test_ids": submitted_test_ids,
             "tests": tests,
         },
@@ -72,9 +80,8 @@ def test_overview(request):
 
 
 @login_required
+@teacher_action_required("Only teacher accounts can change test status.")
 def toggle_test_activation(request, test_id):
-    if not teacher_required(request.user):
-        return HttpResponseForbidden("Only teacher accounts can change test status.")
     if request.method != "POST":
         return redirect("test-overview")
 
@@ -87,33 +94,39 @@ def toggle_test_activation(request, test_id):
 
 
 @login_required
+def start_test(request, test_id):
+    if can_use_teacher_tools(request.user):
+        return redirect("test-detail", test_id=test_id)
+    if request.method != "POST":
+        return redirect("test-overview")
+
+    test = get_object_or_404(Test, pk=test_id)
+    if not test.is_active:
+        return HttpResponseForbidden("This test is not currently available.")
+
+    start_or_continue_attempt(test=test, student=request.user)
+    return redirect("test-detail", test_id=test.pk)
+
+
+@login_required
 def test_detail(request, test_id):
     test = get_object_or_404(Test.objects.prefetch_related("questions"), pk=test_id)
-    existing_submission = TestSubmission.objects.filter(
-        test=test,
-        student=request.user,
-        status=TestSubmission.Status.SUBMITTED,
-    ).prefetch_related("answers").first()
-    latest_submission = (
-        TestSubmission.objects.filter(test=test, student=request.user)
-        .prefetch_related("answers")
-        .first()
-    )
-    can_take_test = test.is_active and existing_submission is None
-    form = TestSubmissionForm(
+    attempt = SubmissionAttempt.load(test=test, student=request.user)
+    teacher_preview = can_use_teacher_tools(request.user)
+
+    if not teacher_preview and not attempt.has_started and attempt.active_submission is None:
+        return redirect("test-overview")
+
+    form = attempt.build_form(
         request.POST or None,
-        test=test,
-        user=request.user,
-        disabled=not can_take_test,
-        initial_submission=existing_submission or latest_submission,
     )
     submitted = request.GET.get("submitted") == "1"
 
-    if request.method == "POST" and not can_take_test:
+    if request.method == "POST" and (teacher_preview or not attempt.can_submit):
         return HttpResponseForbidden("This test is not currently available.")
 
     if request.method == "POST" and form.is_valid():
-        form.save()
+        attempt.submit(form)
         return redirect(f"{request.path}?submitted=1")
 
     return render(
@@ -122,24 +135,47 @@ def test_detail(request, test_id):
         {
             "active_page": "overview",
             "form": form,
-            "can_take_test": can_take_test,
-            "display_submission": existing_submission or latest_submission,
-            "existing_submission": existing_submission,
-            "question_fields": [
-                (question, form[form.answer_field_name(question)])
-                for question in form.questions
-            ],
+            "can_take_test": attempt.can_submit,
+            "display_submission": attempt.display_submission,
+            "existing_submission": attempt.active_submission,
+            "question_fields": attempt.question_fields(form),
+            "remaining_seconds": attempt.remaining_seconds,
             "submitted": submitted,
             "test": test,
+            "teacher_preview": teacher_preview,
         },
     )
 
 
 @login_required
-def test_creation(request):
-    if not teacher_required(request.user):
-        return HttpResponseForbidden("Only teacher accounts can access test creation.")
+def autosave_test_attempt(request, test_id):
+    if request.method != "POST" or can_use_teacher_tools(request.user):
+        return HttpResponseForbidden("Only active student attempts can be autosaved.")
 
+    test = get_object_or_404(Test.objects.prefetch_related("questions"), pk=test_id)
+    attempt = SubmissionAttempt.load(test=test, student=request.user)
+    if attempt.active_submission is not None:
+        return JsonResponse({"finalized": True, "remaining_seconds": 0})
+    if not attempt.can_submit:
+        return JsonResponse({"error": "This test has not been started."}, status=400)
+
+    form = attempt.build_form(request.POST)
+    if not form.is_valid():
+        return JsonResponse({"errors": form.errors}, status=400)
+
+    attempt.save_draft(form)
+    attempt = SubmissionAttempt.load(test=test, student=request.user)
+    return JsonResponse(
+        {
+            "finalized": attempt.active_submission is not None,
+            "remaining_seconds": attempt.remaining_seconds or 0,
+        }
+    )
+
+
+@login_required
+@teacher_action_required("Only teacher accounts can access test creation.")
+def test_creation(request):
     return render(
         request,
         "core/test_creation.html",
@@ -148,38 +184,28 @@ def test_creation(request):
 
 
 @login_required
+@teacher_action_required("Only teacher accounts can view submissions.")
 def test_submissions(request):
-    if not teacher_required(request.user):
-        return HttpResponseForbidden("Only teacher accounts can view submissions.")
-
-    tests = (
-        Test.objects.prefetch_related(
-            "questions",
-            "submissions__student",
-            "submissions__answers__question",
-        )
-        .all()
-    )
-
     return render(
         request,
         "core/test_submissions.html",
-        {"active_page": "submissions", "tests": tests},
+        {"active_page": "submissions", "review_tests": load_teacher_review_tests()},
     )
 
 
 @login_required
+@teacher_action_required("Only teacher accounts can reopen submissions.")
 def reopen_submission(request, submission_id):
-    if not teacher_required(request.user):
-        return HttpResponseForbidden("Only teacher accounts can reopen submissions.")
     if request.method != "POST":
         return redirect("test-submissions")
 
     submission = get_object_or_404(TestSubmission, pk=submission_id)
-    submission.status = TestSubmission.Status.REOPENED
-    submission.reopened_at = timezone.now()
-    submission.reopened_by = request.user
-    submission.save(update_fields=("status", "reopened_at", "reopened_by"))
+    reopen_minutes = request.POST.get("reopen_minutes", "5")
+    reopen_student_submission(
+        submission=submission,
+        teacher=request.user,
+        duration_seconds=max(1, int(reopen_minutes or 5)) * 60,
+    )
 
     return redirect("test-submissions")
 
